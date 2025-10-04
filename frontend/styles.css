@@ -99,6 +99,8 @@ html,body{
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.06);
   box-shadow: 0 4px 18px rgba(0,0,0,.25);
+  overflow-wrap:anywhere;
+  word-break: break-word;
 }
 .bubble.user{
   margin-left:auto;
@@ -148,6 +150,7 @@ html,body{
 }
 .chat-input button:active{ transform: translateY(1px) }
 .chat-input button:hover{ box-shadow: 0 12px 28px rgba(245,208,127,.35) }
+.chat-input button[disabled]{ opacity:.65; cursor:not-allowed; box-shadow:none }
 
 .tiny-hint{
   opacity:.65;
@@ -216,4 +219,106 @@ html,body{
 @media (max-width:700px){
   .bubble{ max-width: 88% }
   .chat-window{ height: 56vh }
+}
+
+/* === Rich content uvnitř bublin ======================================= */
+.bubble .bubble-content p{ margin: 0 0 8px }
+.bubble .bubble-content p:last-child{ margin-bottom: 0 }
+
+/* Odkazy */
+.bubble .bubble-content a{
+  color: var(--aqua);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity .15s ease;
+  word-break: break-word;
+}
+.bubble .bubble-content a:hover{ opacity:.9 }
+.bubble.user .bubble-content a{ color:#2b2b2b }
+.bubble.user .bubble-content a:hover{ opacity:.85 }
+
+/* Obrázkové náhledy */
+.bubble .preview-img{
+  display:block;
+  max-width:100%;
+  height:auto;
+  border-radius:12px;
+  margin-top:6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+/* Seznamy */
+.bubble .bubble-content ul,
+.bubble .bubble-content ol{
+  margin: 6px 0 6px 22px;
+  padding: 0;
+}
+.bubble .bubble-content li{ margin: 4px 0 }
+
+/* Kód */
+.bubble .bubble-content code{
+  background: rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:6px;
+  padding: 2px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95em;
+}
+.bubble .bubble-content pre{
+  background: rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
+  padding: 10px 12px;
+  overflow:auto;
+}
+
+/* Scrollbar */
+.chat-window::-webkit-scrollbar{ width:10px }
+.chat-window::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  border-radius:8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.chat-window::-webkit-scrollbar-track{ background: transparent }
+
+/* Loader shimmer (pokud použiješ .pending) */
+.bubble.pending{ position:relative; overflow:hidden }
+.bubble.pending::after{
+  content:"";
+  position:absolute; inset:0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,255,255,.07) 45%,
+    rgba(255,255,255,.12) 55%,
+    transparent 100%);
+  transform: translateX(-100%);
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+@keyframes shimmer{
+  0%{ transform: translateX(-100%) }
+  100%{ transform: translateX(100%) }
+}
+
+/* Typing (•••) animace */
+.bubble.typing{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:10px 14px;
+  min-width:50px;
+}
+.typing-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background: rgba(255,255,255,.5);
+  animation: typingPulse 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2){ animation-delay:.15s }
+.typing-dot:nth-child(3){ animation-delay:.3s }
+@keyframes typingPulse{
+  0%,80%,100%{ transform: scale(0.6); opacity: .4 }
+  40%{        transform: scale(1.0); opacity: 1 }
 }

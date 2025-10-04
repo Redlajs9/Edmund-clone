@@ -7,15 +7,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      # předej API klíč (doplň ve své .env)
+      # AI / RAG
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      # volitelné:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       RAG_INDEX_PATH: /app/data/faiss.index
       RAG_STORE_PATH: /app/data/store.npy
       IO_DB_PATH: /app/data/io.db
     volumes:
+      # celý backend jako /app/backend (read-only) – odpovídá importu backend.app:app
       - ./backend:/app/backend:ro
+      # data (previews/, electrical/, embeddings, db, …) – musí být RW
       - ./data:/app/data
     ports:
       - "8000:8000"
