@@ -1,10 +1,44 @@
+version: "3.9"
+
 services:
   api:
-    build: ./backend
-    ports: ["8000:8000"]
-    env_file: ./backend/.env.example
+    container_name: edmund-clone-api-1
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      # předej API klíč (doplň ve své .env)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # volitelné:
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      RAG_INDEX_PATH: /app/data/faiss.index
+      RAG_STORE_PATH: /app/data/store.npy
+      IO_DB_PATH: /app/data/io.db
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn backend.app:app
+      --host 0.0.0.0
+      --port 8000
+      --proxy-headers
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   ui:
-    build: ./frontend
-    ports: ["5173:80"]
-    depends_on: [api]
+    container_name: edmund-clone-ui-1
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
