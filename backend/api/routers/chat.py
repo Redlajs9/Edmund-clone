@@ -10,8 +10,8 @@ router = APIRouter(tags=["chat"])
 orc = Orchestrator()
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat_endpoint(req: ChatRequest):
+def handle_chat(req: ChatRequest) -> ChatResponse:
+    """Jádro chatu – použitelné z HTTP endpointu i interně z unified routeru."""
     q = (req.question or "").strip()
 
     # 0) Rychlá deterministická zkratka (bez LLM) pro prefixové dotazy:
@@ -29,8 +29,8 @@ def chat_endpoint(req: ChatRequest):
             items = list(data["items"].items())[:50]
             lines = []
             for tag, io in items:
-                e = ", ".join([f"{i['io_type']} {i['address']}" for i in io["inputs"]]) or "-"
-                a = ", ".join([f"{o['io_type']} {o['address']}" for o in io["outputs"]]) or "-"
+                e = ", ".join([f"{i['io_type']} {i['address']}" for i in io.get("inputs", [])]) or "-"
+                a = ", ".join([f"{o['io_type']} {o['address']}" for o in io.get("outputs", [])]) or "-"
                 lines.append(f"{tag}: Vstupy [{e}] | Výstupy [{a}]")
             tail = "" if data["count"] <= 50 else f"\n… zobrazeno 50 z {data['count']} tagů."
             return ChatResponse(status="ok", answer="\n".join(lines) + tail, tools_used=["list_valves_by_prefix"])
@@ -59,3 +59,20 @@ def chat_endpoint(req: ChatRequest):
         answer=result.get("answer", ""),
         tools_used=result.get("tools_used", []),
     )
+
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_endpoint(req: ChatRequest):
+    """HTTP endpoint – volá společnou logiku."""
+    return handle_chat(req)
+
+
+# ==== Interní volání pro unified router ====
+async def chat(payload: dict, _request=None):
+    """
+    Umožní volání z unified.py: `await base_chat.chat({"question": ...}, request)`
+    Vrací dict stejně jako JSON odpověď endpointu.
+    """
+    req = ChatRequest(**payload)
+    resp = handle_chat(req)
+    return resp.dict()

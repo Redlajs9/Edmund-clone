@@ -1,8 +1,8 @@
 /* ====== Konfigurace API ======
- * Backend: POST /chat {question:"..."} -> {answer:"..."}
+ * Backend: POST /chat/unified {question:"...", top_k:5} -> {mode:"logic"|"chat", answer:"...", used_blocks:[...]}
  */
 const API_BASE  = "http://localhost:8000";
-const API_URL   = `${API_BASE}/chat`;
+const API_URL   = `${API_BASE}/chat/unified`;
 /* Kde hostuješ soubory náhledů (relativní cesty se napojí sem).
  * Pokud obrázky servíruje UI (Vite/NGINX), dej ASSET_BASE = window.location.origin
  */
@@ -51,13 +51,14 @@ chatForm.addEventListener("submit", async (e) => {
     if (sendBtn) sendBtn.disabled = true;
     typingBubble = addTypingBubble();
 
-    console.log("[REQ] →", API_URL, { question: text });
+    const payload = { question: text, top_k: 5 };
+    console.log("[REQ] →", API_URL, payload);
     const t0 = performance.now();
 
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: text })
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
@@ -77,7 +78,15 @@ chatForm.addEventListener("submit", async (e) => {
     console.log(`[REQ] ← ${Math.round(t1 - t0)} ms`, data);
 
     removeTypingBubble(typingBubble);
-    const answer = (data && (data.answer ?? data.message ?? data.text)) || "(prázdná odpověď)";
+
+    // priorita: answer || message || text
+    let answer = (data && (data.answer ?? data.message ?? data.text)) || "(prázdná odpověď)";
+
+    // pokud běží logic mód, připoj použité FB bloky
+    if (data && data.mode === "logic" && Array.isArray(data.used_blocks) && data.used_blocks.length) {
+      answer += `\n\n_Použité FB:_ ${data.used_blocks.join(", ")}`;
+    }
+
     addBubble(answer, "bot", { rich: true });
   } catch (err) {
     console.error("[ERR] fetch:", err);

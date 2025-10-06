@@ -5,6 +5,7 @@ python-dotenv
 pypdf
 pymupdf
 pillow
+pyodbc
 
 openai>=1.40.0
 
@@ -12,3 +13,10 @@ openai>=1.40.0
 numpy
 tiktoken
 faiss-cpu
+
+# OCR stack
+pdf2image
+pytesseract
+Pillow
+
+numpy

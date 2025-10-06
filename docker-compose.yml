@@ -1,23 +1,91 @@
 version: "3.9"
 
 services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: edmund-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_PID=Express
+      - SA_PASSWORD=${MSSQL_PASSWORD}   # bere heslo z .env (MSSQL_PASSWORD=StrongPass1!)
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ./backups:/var/opt/mssql/backups
+    healthcheck:
+      # ODBC 18 má default Encrypt=Yes → s self-signed certem musí být -C
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${MSSQL_PASSWORD}", "-C", "-Q", "SET NOCOUNT ON; SELECT 1;"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # jednorázový init (restore + login)
+  mssql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: edmund-mssql-init
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      MSSQL_PASSWORD: ${MSSQL_PASSWORD}
+      DB_NAME: ${MSSQL_DB:-ProleitProductionDB}
+      RESTORE_FILE: ${RESTORE_FILE:-/var/opt/mssql/backups/dbldc_backup_031025.bak}
+      APP_LOGIN: ${APP_LOGIN:-edmund}
+      APP_PASSWORD: ${APP_PASSWORD:-ChangeMe!234}
+    volumes:
+      - ./mssql-init:/scripts:ro
+    command: >
+      bash -lc '
+        set -e
+        i=0
+        until /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "$MSSQL_PASSWORD" -N -C -b -r1 \
+          -i /scripts/initdb.sql \
+          -vDB_NAME="${DB_NAME}" -vRESTORE_FILE="${RESTORE_FILE}" -vAPP_LOGIN="${APP_LOGIN}" -vAPP_PASSWORD="${APP_PASSWORD}"
+        do
+          i=$((i+1))
+          if [ $i -ge 30 ]; then echo "init failed"; exit 1; fi
+          echo "init: SQL not ready yet, retry $i/30"; sleep 2
+        done
+      '
+    restart: "no"
+
   api:
     container_name: edmund-clone-api-1
     build:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      # AI / RAG
+      # AI / RAG (vše z .env — NEDÁVEJ sem tajný klíč přímo!)
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       RAG_INDEX_PATH: /app/data/faiss.index
       RAG_STORE_PATH: /app/data/store.npy
       IO_DB_PATH: /app/data/io.db
+
+      # OCR (volitelné)
+      PID_OCR_ENABLE: "true"
+      PID_OCR_LANGS: "eng+ces+deu"
+      PID_OCR_DPI: "600"
+      PID_OCR_UPSCALE: "2.2"
+      PID_OCR_THRESHOLD: "170"
+      PID_OCR_MEDIAN: "5"
+
+      # MSSQL připojení pro backend
+      MSSQL_HOST: mssql
+      MSSQL_PORT: "1433"
+      MSSQL_DB: ${MSSQL_DB:-edmund}
+      MSSQL_USER: sa
+      MSSQL_PASSWORD: ${MSSQL_PASSWORD}
+      # SQLAlchemy DSN (ODBC 18 + trust cert)
+      SQLALCHEMY_DSN: "mssql+pyodbc://sa:${MSSQL_PASSWORD}@mssql:1433/${MSSQL_DB:-edmund}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+
     volumes:
-      # celý backend jako /app/backend (read-only) – odpovídá importu backend.app:app
       - ./backend:/app/backend:ro
-      # data (previews/, electrical/, embeddings, db, …) – musí být RW
       - ./data:/app/data
+      - ./data/HWF:/app/data/HWF:ro
     ports:
       - "8000:8000"
     command: >
@@ -31,6 +99,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    depends_on:
+      mssql:
+        condition: service_healthy
+      mssql-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   ui:
@@ -43,3 +116,6 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+
+volumes:
+  mssql_data:
