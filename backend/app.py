@@ -15,6 +15,7 @@ from .api.routers import (
     pids,
     logic,
     unified,
+    hwf,
 )
 
 # ==== FastAPI app ====
@@ -55,3 +56,4 @@ app.include_router(preview.router)  # dynamický fallback /preview/electrical
 app.include_router(pids.router)
 app.include_router(logic.router)
 app.include_router(unified.router)
+app.include_router(hwf.router)

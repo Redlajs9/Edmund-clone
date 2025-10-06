@@ -24,7 +24,7 @@ try {
 
 /* ====== Start zpráva ====== */
 addBubble(
-  "Mohu pomoci s následujícími úkoly:\n\n1. Vyhledávání a zobrazení I/O adres pro konkrétní ventily podle jejich TAGu.\n2. Vytvoření seznamu ventilů podle prefixu TAGu.\n3. Vyhledávání výkresů, kde se vyskytují specifické TAGy.\n4. Získání aktuálního stavu systému a posledních událostí.\n\nPokud máš konkrétní dotaz nebo úkol, dej mi vědět!",
+  "Vítej, poutníku. Co pro tebe mohu udělat?",
   "bot",
   { rich: true }
 );

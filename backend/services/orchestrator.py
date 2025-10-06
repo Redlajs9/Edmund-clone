@@ -14,27 +14,51 @@ DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 class Orchestrator:
     """
     Orchestruje LLM volání:
-    - přidá systémový prompt a few-shots
+    - přidá systémový prompt a few-shots (včetně schopností/capabilities)
     - pokud je k dispozici RAG kontext, přidá jej do system zprávy
-    - povolí function-calling (find_valve/query_events/get_system_state)
-    - postará se o vykonání tool-calls a vrácení finální odpovědi
+    - povolí function-calling (find_valve/query_events/get_system_state/...)
+    - vykoná tool-calls a vrátí finální odpověď
     """
     def __init__(self, model: str | None = None, temperature: float = 0.2):
         self.client = OpenAI()
         self.model = model or DEFAULT_MODEL
         self.temperature = temperature
         self.rag = RagStore(self.client)
-        self.rag.load()  # tiché; pokud index není, jede se bez RAG
+        # Tiché načtení indexu; pokud chybí, RAG se prostě nepoužije
+        try:
+            self.rag.load()
+        except Exception:
+            pass
         # možnost vypnout LLM (např. při absenci klíče / mock režim)
         self.enabled = bool(os.getenv("OPENAI_API_KEY")) and os.getenv("LLM_MODE", "").lower() != "mock"
 
     def _ctx_messages(self, question: str) -> List[Dict[str, str]]:
+        """
+        Vyhledá RAG kontext k dotazu a vrátí ho jako system zprávu(y).
+        """
         msgs: List[Dict[str, str]] = []
-        hits = self.rag.search(question, k=4)
+        try:
+            hits = self.rag.search(question, k=4)
+        except Exception:
+            hits = []
         if hits:
+            # zhuštěný kontext (číslované pasáže)
             ctx = "\n\n--- KONTEXT ---\n" + "\n\n".join([f"[{i+1}] {t}" for i, (t, _) in enumerate(hits)])
             msgs.append({"role": "system", "content": ctx})
         return msgs
+
+    def _runtime_message(self, rag_active: bool) -> Dict[str, str]:
+        """
+        Krátká runtime poznámka pro LLM (ať neslibuje nepřipojené věci).
+        """
+        runtime = [
+            f"RAG:{'ON' if rag_active else 'OFF'}",
+            f"OPENAI:{'ON' if self.enabled else 'OFF'}",
+            f"MODEL:{self.model}",
+            f"TEMP:{self.temperature}",
+        ]
+        note = "[Runtime] " + " | ".join(runtime)
+        return {"role": "system", "content": note}
 
     def answer(self, question: str) -> Dict[str, Any]:
         # Bez LLM vrať přátelský fallback (endpoint nespadne)
@@ -44,10 +68,17 @@ class Orchestrator:
                 "tools_used": []
             }
 
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        messages += FEWSHOTS
-        messages += self._ctx_messages(question)
-        messages.append({"role": "user", "content": question})
+        # Připrav RAG kontext a runtime message
+        ctx_msgs = self._ctx_messages(question)
+        rag_active = bool(ctx_msgs)
+
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            self._runtime_message(rag_active),
+            *FEWSHOTS,
+            *ctx_msgs,
+            {"role": "user", "content": question},
+        ]
 
         tools_used: List[str] = []
 
